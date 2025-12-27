@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}种子表{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h2>全体种子表（公开展示）</h2>
+
+  <div class="flash">
+    <div><b>找自己的方式：</b>按列找，每列 10 个学号（例如 23 在 “21-30” 这一列）。</div>
+    <div class="small muted">每个格子显示：学号 + R。</div>
+    <hr class="sep">
+    <div><b>公式：</b>X = 学号*100 + (R + i)，i 为选项编号(1..N)。学生纸条只写 X。</div>
+  </div>
+
+  {% set cols = (max_sid + 9) // 10 %}
+  <div class="seed-cols">
+    {% for col in range(0, cols) %}
+      {% set start_sid = col * 10 + 1 %}
+      {% set end_sid = [start_sid + 9, max_sid] | min %}
+
+      <div class="seed-col">
+        <div class="seed-col-label">{{ start_sid }}-{{ end_sid }}</div>
+
+        <div class="seed-col-list">
+          {% for offset in range(0, 10) %}
+            {% set sid = start_sid + offset %}
+            {% if sid <= max_sid %}
+              <div class="seed-cell">
+                <div class="seed-sid">{{ sid }}</div>
+                <div class="seed-r">R={{ "%02d"|format(seeds[sid-1].r) }}</div>
+              </div>
+            {% else %}
+              <div class="seed-cell" style="opacity:0.25;">
+                <div class="seed-sid">&nbsp;</div>
+                <div class="seed-r">&nbsp;</div>
+              </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+
+  <div class="muted small" style="margin-top:10px;">
+    提示：R 范围为 00~89，确保 R+i 永远不会超过 99（i<=10）。
+  </div>
+</div>
+{% endblock %}

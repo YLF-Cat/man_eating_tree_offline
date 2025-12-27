@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+{% block title %}结算结果{% endblock %}
+
+{% block content %}
+<div class="grid">
+  <div class="card">
+    <h2>结算 / 加分（本题已停止收集）</h2>
+    <div class="muted small">
+      题目ID：{{ question.id }}　
+      预设ID：{{ question.preset_id or '-' }}　
+      发布：{{ question.created_at.strftime('%Y-%m-%d %H:%M:%S') }}　
+      停止收集：{{ question.settled_at.strftime('%Y-%m-%d %H:%M:%S') if question.settled_at else '-' }}
+    </div>
+
+    <div class="big-question">{{ question.content }}</div>
+
+    <details style="margin-top:12px;">
+      <summary class="btn btn-primary">编辑选项（改文字 / 追加，编号不变）</summary>
+      <div class="flash" style="margin-top:10px;">
+        只改文字不会影响已提交答案（答案只存“选项编号”）。如需追加新选项，只能加在末尾，最多10项。
+      </div>
+
+      <form method="POST" action="{{ url_for('edit_options_for_question', qid=question.id) }}">
+        <input type="hidden" name="next" value="results">
+        <table class="table">
+          <thead>
+            <tr>
+              <th>编号</th>
+              <th>选项文字</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in by_option %}
+              <tr>
+                <td style="width:70px;"><b>{{ item.index }}</b></td>
+                <td>
+                  <input class="input" style="width:100%;" name="opt{{ item.index }}" value="{{ item.text }}">
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+
+        <div class="muted small">追加选项（每行一个）：</div>
+        <textarea class="input" style="width:100%; height:110px; resize:vertical;" name="append_options"></textarea>
+
+        <div class="row" style="margin-top:10px;">
+          <button class="btn btn-ok" type="submit">保存选项</button>
+        </div>
+      </form>
+    </details>
+
+    <div class="kpi">
+      <div class="pill">已交：<b>{{ answered_count }}</b> / {{ max_sid }}</div>
+      <div class="pill">未交：<b>{{ missing|length }}</b></div>
+      <div class="pill"><a href="{{ url_for('operator') }}">回到主页面</a></div>
+      <div class="pill"><a href="{{ url_for('presets') }}">去选下一题</a></div>
+    </div>
+
+    <hr class="sep">
+
+    <h3>加分操作（只作用于本题）</h3>
+
+    <div class="card" style="padding:12px; margin-bottom:10px;">
+      <form method="POST" action="{{ url_for('score_actions') }}" class="row">
+        <input type="hidden" name="question_id" value="{{ question.id }}">
+        <input type="hidden" name="action_type" value="A">
+        <input type="hidden" name="next" value="results">
+        <div class="muted small" style="min-width:120px;">按选项加分</div>
+        <input class="input" name="option_index" inputmode="numeric" placeholder="选项编号(1..N)" />
+        <input class="input" name="change" inputmode="decimal" placeholder="加分(可负)" />
+        <button class="btn btn-ok" type="submit">执行</button>
+      </form>
+    </div>
+
+    <div class="card" style="padding:12px; margin-bottom:10px;">
+      <form method="POST" action="{{ url_for('score_actions') }}" class="row">
+        <input type="hidden" name="question_id" value="{{ question.id }}">
+        <input type="hidden" name="action_type" value="B">
+        <input type="hidden" name="next" value="results">
+        <div class="muted small" style="min-width:120px;">按学号加分</div>
+        <input class="input" name="sid" inputmode="numeric" placeholder="学号(1..{{ max_sid }})" />
+        <input class="input" name="change" inputmode="decimal" placeholder="加分(可负)" />
+        <button class="btn btn-ok" type="submit">执行</button>
+      </form>
+    </div>
+
+    <div class="card" style="padding:12px;">
+      <form method="POST" action="{{ url_for('score_actions') }}" class="row">
+        <input type="hidden" name="question_id" value="{{ question.id }}">
+        <input type="hidden" name="action_type" value="C">
+        <input type="hidden" name="next" value="results">
+        <div class="muted small" style="min-width:120px;">选项概率加分</div>
+        <input class="input" name="option_index" inputmode="numeric" placeholder="选项编号(1..N)" />
+        <input class="input" name="prob_percent" inputmode="decimal" placeholder="概率%(0~100)" />
+        <input class="input" name="change1" inputmode="decimal" placeholder="命中加分" />
+        <input class="input" name="change2" inputmode="decimal" placeholder="未命中加分" />
+        <button class="btn btn-ok" type="submit">执行</button>
+      </form>
+    </div>
+
+    <hr class="sep">
+
+    <h3>更正（删除某学号本题提交）</h3>
+    <form method="POST" action="{{ url_for('delete_submission_for_question', qid=question.id) }}" class="row">
+      <input type="hidden" name="next" value="results">
+      <input class="input" name="sid" inputmode="numeric" autocomplete="off" placeholder="学号(1..{{ max_sid }})" />
+      <button class="btn btn-danger" type="submit">删除提交</button>
+    </form>
+
+    <hr class="sep">
+
+    <h3>分布与名单</h3>
+    {% for item in by_option %}
+      <div class="card" style="margin-bottom:10px;">
+        <div style="display:flex; justify-content:space-between; gap:10px; align-items:center;">
+          <div style="font-size:20px;">
+            <span class="badge">{{ item.index }}</span> {{ item.text }}
+          </div>
+          <div class="muted">人数：<b>{{ item.count }}</b></div>
+        </div>
+
+        <div class="muted small" style="margin-top:6px;">
+          {% if item.answers|length == 0 %}
+            （无人选择）
+          {% else %}
+            学号：
+            {% for a in item.answers %}
+              {{ a.sid }}{% if a.score_change != 0 %}({{ '%.2f'|format(a.score_change) }}){% endif %}{% if not loop.last %}, {% endif %}
+            {% endfor %}
+          {% endif %}
+        </div>
+      </div>
+    {% endfor %}
+
+    <hr class="sep">
+
+    <h3>未交名单</h3>
+    <div class="muted small">
+      {% if missing|length == 0 %}
+        （无人未交）
+      {% else %}
+        {{ missing|join(', ') }}
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>排行榜</h2>
+    <table class="table">
+      <thead>
+        <tr>
+          <th>排名</th>
+          <th>学号</th>
+          <th>积分</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in students %}
+          <tr>
+            <td>{{ loop.index }}</td>
+            <td>{{ s.sid }}</td>
+            <td>{{ '%.2f'|format(s.score) }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

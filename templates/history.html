@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}历史{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h2>历史题目</h2>
+  {% if questions|length == 0 %}
+    <div class="flash">暂无历史题目。</div>
+  {% else %}
+    <table class="table">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>预设ID</th>
+          <th>题干</th>
+          <th>发布</th>
+          <th>结算</th>
+          <th>查看</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for q in questions %}
+          <tr>
+            <td>{{ q.id }}</td>
+            <td>{{ q.preset_id or '-' }}</td>
+            <td>{{ q.content }}</td>
+            <td class="small">{{ q.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+            <td class="small">{{ q.settled_at.strftime('%Y-%m-%d %H:%M:%S') if q.settled_at else '-' }}</td>
+            <td><a href="{{ url_for('results', qid=q.id) }}">结果页</a></td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+</div>
+{% endblock %}

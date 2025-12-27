@@ -1,0 +1,208 @@
+{% extends "base.html" %}
+{% block title %}主页面{% endblock %}
+
+{% block content %}
+<div class="grid">
+  <div class="card">
+    <h2>当前题目</h2>
+
+    {% if question %}
+      <div class="muted small">
+        题目ID：{{ question.id }}　
+        预设ID：{{ question.preset_id or '-' }}　
+        发布时间：{{ question.created_at.strftime('%Y-%m-%d %H:%M:%S') }}
+      </div>
+
+      <div class="big-question">{{ question.content }}</div>
+
+      <div class="options">
+        {% for opt in question.options() %}
+          <div class="option">
+            <span class="badge">{{ loop.index }}</span>
+            {{ opt }}
+          </div>
+        {% endfor %}
+      </div>
+
+      <details style="margin-top:12px;">
+        <summary class="btn btn-primary">编辑选项（改文字 / 追加，编号不变）</summary>
+        <div class="flash" style="margin-top:10px;">
+          - 只建议改“文字内容”，不要改选项编号含义（编号1..N不变）<br>
+          - 允许追加新选项（加在末尾，最多10项）<br>
+          - 不允许减少选项数量（避免密文解码范围改变）
+        </div>
+
+        <form method="POST" action="{{ url_for('edit_options_for_question', qid=question.id) }}">
+          <input type="hidden" name="next" value="operator">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>编号</th>
+                <th>选项文字</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for opt in question.options() %}
+                <tr>
+                  <td style="width:70px;"><b>{{ loop.index }}</b></td>
+                  <td>
+                    <input class="input" style="width:100%;" name="opt{{ loop.index }}" value="{{ opt }}">
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+
+          <div class="muted small">追加选项（每行一个）：</div>
+          <textarea class="input" style="width:100%; height:110px; resize:vertical;" name="append_options" placeholder="例如：&#10;新选项A&#10;新选项B"></textarea>
+
+          <div class="row" style="margin-top:10px;">
+            <button class="btn btn-ok" type="submit">保存选项</button>
+          </div>
+        </form>
+      </details>
+
+      <div class="kpi">
+        <div class="pill">已收：<b id="answered-count">{{ stats.answered_count if stats else 0 }}</b> / {{ max_sid }}</div>
+        <div class="pill">未收：<b id="missing-count">{{ (stats.missing|length) if stats else max_sid }}</b></div>
+      </div>
+
+      <hr class="sep">
+
+      <h3>高速录入（只输入 X）</h3>
+      <div class="row">
+        <input class="input" id="code-input" inputmode="numeric" autocomplete="off" placeholder="输入 X，回车提交" autofocus />
+        <button class="btn btn-primary" id="submit-btn">提交</button>
+        <form method="POST" action="{{ url_for('settle_question') }}" style="margin:0;">
+          <button class="btn btn-danger" type="submit">停止收集并进入加分/结果页</button>
+        </form>
+      </div>
+      <div class="code-hint">
+        公式：X = 学号*100 + (R + i)，i为选项编号(1..N)。学生纸条只写X。
+      </div>
+
+      <div id="submit-result" class="flash" style="display:none;"></div>
+
+      <hr class="sep">
+
+      <h3>更正（删除某学号本题提交）</h3>
+      <form method="POST" action="{{ url_for('delete_submission') }}" class="row">
+        <input class="input" name="sid" inputmode="numeric" autocomplete="off" placeholder="学号(1~{{ max_sid }})" />
+        <button class="btn btn-danger" type="submit">删除提交</button>
+      </form>
+
+      <hr class="sep">
+
+      <h3>最近录入</h3>
+      <table class="table">
+        <thead>
+          <tr>
+            <th>时间</th>
+            <th>学号</th>
+            <th>选项</th>
+            <th>X</th>
+          </tr>
+        </thead>
+        <tbody id="recent-tbody">
+          {% for a in recent_answers %}
+            <tr>
+              <td class="small">{{ a.timestamp.strftime('%H:%M:%S') }}</td>
+              <td>{{ a.sid }}</td>
+              <td>{{ a.option_index }}</td>
+              <td>{{ a.code }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+
+    {% else %}
+      <div class="flash">
+        当前没有正在进行的题目。请先去 <a href="{{ url_for('presets') }}">选题页</a> 发布一道题。
+      </div>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h2>排行榜（已出现过的学号）</h2>
+    <div class="muted small">新学号第一次出现时，初始积分=当前最低分。</div>
+    <table class="table">
+      <thead>
+        <tr>
+          <th>排名</th>
+          <th>学号</th>
+          <th>积分</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in students %}
+          <tr>
+            <td>{{ loop.index }}</td>
+            <td>{{ s.sid }}</td>
+            <td>{{ '%.2f'|format(s.score) }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+(function(){
+  const input = document.getElementById('code-input');
+  const btn = document.getElementById('submit-btn');
+  const box = document.getElementById('submit-result');
+  const answeredEl = document.getElementById('answered-count');
+  const missingEl = document.getElementById('missing-count');
+  const recentTbody = document.getElementById('recent-tbody');
+
+  function showResult(ok, text) {
+    box.style.display = 'block';
+    box.className = 'flash ' + (ok ? 'result-ok' : 'result-err');
+    box.textContent = text;
+  }
+
+  async function submitCode() {
+    if (!input) return;
+    const code = (input.value || '').trim();
+    if (!code) return;
+
+    try {
+      const res = await fetch('{{ url_for("submit_code") }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code })
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) {
+        showResult(false, data.error || '提交失败');
+        input.select();
+        return;
+      }
+
+      showResult(true, `${data.timestamp}  已录入：${data.sid}号 -> 选项${data.option_index}${data.option_text ? ('（' + data.option_text + '）') : ''}`);
+      input.value = '';
+      input.focus();
+
+      if (answeredEl) answeredEl.textContent = data.answered_count;
+      if (missingEl) missingEl.textContent = data.missing_count;
+
+      if (recentTbody) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td class="small">${data.timestamp}</td><td>${data.sid}</td><td>${data.option_index}</td><td>${code}</td>`;
+        recentTbody.prepend(tr);
+        while (recentTbody.children.length > 12) recentTbody.removeChild(recentTbody.lastChild);
+      }
+    } catch (e) {
+      showResult(false, '网络/系统错误：' + (e && e.message ? e.message : e));
+      input.select();
+    }
+  }
+
+  if (btn) btn.addEventListener('click', function(ev){ ev.preventDefault(); submitCode(); });
+  if (input) input.addEventListener('keydown', function(ev){
+    if (ev.key === 'Enter') { ev.preventDefault(); submitCode(); }
+  });
+})();
+</script>
+{% endblock %}

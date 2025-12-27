@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}选题页{% endblock %}
+
+{% block content %}
+<div class="card">
+  <h2>预设题库（instance/presets.json）</h2>
+  <div class="muted small">
+    临场点选发布题目。发布后会自动停止上一题的“进行中”状态。
+  </div>
+
+  {% if active_question %}
+    <div class="flash">
+      当前进行中题目：ID={{ active_question.id }}（{{ active_question.preset_id or '-' }}）
+      <a href="{{ url_for('operator') }}">回到主页面</a>
+    </div>
+  {% endif %}
+
+  {% if presets|length == 0 %}
+    <div class="flash">
+      没有读到任何预设题目。请检查 `instance/presets.json` 是否存在且为合法JSON数组。
+    </div>
+  {% else %}
+    <table class="table">
+      <thead>
+        <tr>
+          <th>预设ID</th>
+          <th>题干</th>
+          <th>选项数</th>
+          <th>操作</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in presets %}
+          <tr>
+            <td><b>{{ p.id }}</b></td>
+            <td>{{ p.content }}</td>
+            <td>{{ p.options|length }}</td>
+            <td>
+              <form method="POST" action="{{ url_for('start_preset') }}" style="margin:0;">
+                <input type="hidden" name="preset_id" value="{{ p.id }}">
+                <button class="btn btn-primary" type="submit">发布本题</button>
+              </form>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% endif %}
+</div>
+{% endblock %}
