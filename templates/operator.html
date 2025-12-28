@@ -13,7 +13,8 @@
         发布时间：{{ question.created_at.strftime('%Y-%m-%d %H:%M:%S') }}
       </div>
 
-      <div class="big-question">{{ question.content }}</div>
+      <!-- 题面支持 HTML -->
+      <div class="big-question">{{ question.content | safe }}</div>
 
       <div class="options">
         {% for opt in question.options() %}
@@ -27,7 +28,7 @@
       <details style="margin-top:12px;">
         <summary class="btn btn-primary">编辑选项（改文字 / 追加，编号不变）</summary>
         <div class="flash" style="margin-top:10px;">
-          - 只建议改“文字内容”，不要改选项编号含义（编号1..N不变）<br>
+          - 只建议改“文字内容”，编号1..N不变<br>
           - 允许追加新选项（加在末尾，最多10项）<br>
           - 不允许减少选项数量（避免密文解码范围改变）
         </div>
@@ -54,7 +55,7 @@
           </table>
 
           <div class="muted small">追加选项（每行一个）：</div>
-          <textarea class="input" style="width:100%; height:110px; resize:vertical;" name="append_options" placeholder="例如：&#10;新选项A&#10;新选项B"></textarea>
+          <textarea class="input" style="width:100%; height:110px; resize:vertical;" name="append_options"></textarea>
 
           <div class="row" style="margin-top:10px;">
             <button class="btn btn-ok" type="submit">保存选项</button>
@@ -71,7 +72,7 @@
 
       <h3>高速录入（只输入 X）</h3>
       <div class="row">
-        <input class="input" id="code-input" inputmode="numeric" autocomplete="off" placeholder="输入 X，回车提交" autofocus />
+        <input class="input" id="code-input" inputmode="numeric" autocomplete="off" placeholder="输入 X（满4位自动提交）" autofocus />
         <button class="btn btn-primary" id="submit-btn">提交</button>
         <form method="POST" action="{{ url_for('settle_question') }}" style="margin:0;">
           <button class="btn btn-danger" type="submit">停止收集并进入加分/结果页</button>
@@ -82,6 +83,36 @@
       </div>
 
       <div id="submit-result" class="flash" style="display:none;"></div>
+
+      <!-- 浮动小键盘（可拖拽/缩放，位置和大小会保存） -->
+      <div id="floating-keypad" class="floating-keypad" style="--kp-scale: 1;">
+        <div class="floating-keypad-header" data-drag-handle>
+          <div class="floating-keypad-title">小键盘（拖这里移动）</div>
+          <button class="floating-keypad-mini-btn" type="button" data-action="reset-pos">重置</button>
+        </div>
+
+        <div class="floating-keypad-body">
+          <div class="keypad" id="keypad">
+            <button class="keypad-btn" type="button" data-key="1">1</button>
+            <button class="keypad-btn" type="button" data-key="2">2</button>
+            <button class="keypad-btn" type="button" data-key="3">3</button>
+            <button class="keypad-btn" type="button" data-key="4">4</button>
+            <button class="keypad-btn" type="button" data-key="5">5</button>
+            <button class="keypad-btn" type="button" data-key="6">6</button>
+            <button class="keypad-btn" type="button" data-key="7">7</button>
+            <button class="keypad-btn" type="button" data-key="8">8</button>
+            <button class="keypad-btn" type="button" data-key="9">9</button>
+
+            <button class="keypad-btn keypad-fn" type="button" data-action="back">退格</button>
+            <button class="keypad-btn" type="button" data-key="0">0</button>
+            <button class="keypad-btn keypad-fn" type="button" data-action="clear">清空</button>
+
+            <button class="keypad-btn keypad-submit" type="button" data-action="submit">录入</button>
+          </div>
+        </div>
+
+        <div class="floating-keypad-resizer" data-resize-handle title="拖拽缩放"></div>
+      </div>
 
       <hr class="sep">
 
@@ -94,13 +125,12 @@
       <hr class="sep">
 
       <h3>最近录入</h3>
+      <div class="muted small">为防被旁观推断，本区不显示选项编号与X。</div>
       <table class="table">
         <thead>
           <tr>
             <th>时间</th>
             <th>学号</th>
-            <th>选项</th>
-            <th>X</th>
           </tr>
         </thead>
         <tbody id="recent-tbody">
@@ -108,8 +138,6 @@
             <tr>
               <td class="small">{{ a.timestamp.strftime('%H:%M:%S') }}</td>
               <td>{{ a.sid }}</td>
-              <td>{{ a.option_index }}</td>
-              <td>{{ a.code }}</td>
             </tr>
           {% endfor %}
         </tbody>
@@ -124,6 +152,23 @@
 
   <div class="card">
     <h2>排行榜（已出现过的学号）</h2>
+
+    <details style="margin:10px 0;">
+      <summary class="btn btn-ok">导出排行榜 txt（前/后 X 名）</summary>
+      <div class="muted small" style="margin:8px 0;">
+        下载格式：每行 `5 学号`（第一个数字默认 5，可改）。
+      </div>
+      <form method="GET" action="{{ url_for('export_leaderboard_txt') }}" target="_blank" class="row">
+        <select class="input" name="mode">
+          <option value="top">前 X 名</option>
+          <option value="bottom">后 X 名</option>
+        </select>
+        <input class="input" name="n" inputmode="numeric" value="10" placeholder="X" />
+        <input class="input" name="prefix" inputmode="numeric" value="5" placeholder="每行第1个数字" />
+        <button class="btn btn-primary" type="submit">下载TXT</button>
+      </form>
+    </details>
+
     <div class="muted small">新学号第一次出现时，初始积分=当前最低分。</div>
     <table class="table">
       <thead>
@@ -155,7 +200,14 @@
   const missingEl = document.getElementById('missing-count');
   const recentTbody = document.getElementById('recent-tbody');
 
+  const floating = document.getElementById('floating-keypad');
+  const keypad = document.getElementById('keypad');
+
+  let isSubmitting = false;
+  let lastAutoSubmitted = null; // 防止同一串4位反复自动提交
+
   function showResult(ok, text) {
+    if (!box) return;
     box.style.display = 'block';
     box.className = 'flash ' + (ok ? 'result-ok' : 'result-err');
     box.textContent = text;
@@ -165,7 +217,9 @@
     if (!input) return;
     const code = (input.value || '').trim();
     if (!code) return;
+    if (isSubmitting) return;
 
+    isSubmitting = true;
     try {
       const res = await fetch('{{ url_for("submit_code") }}', {
         method: 'POST',
@@ -180,29 +234,222 @@
         return;
       }
 
-      showResult(true, `${data.timestamp}  已录入：${data.sid}号 -> 选项${data.option_index}${data.option_text ? ('（' + data.option_text + '）') : ''}`);
+      // 不显示选项/选项文字，防旁观推断
+      showResult(true, `${data.timestamp}  已录入：${data.sid}号`);
+
       input.value = '';
       input.focus();
+      lastAutoSubmitted = null;
 
       if (answeredEl) answeredEl.textContent = data.answered_count;
       if (missingEl) missingEl.textContent = data.missing_count;
 
       if (recentTbody) {
         const tr = document.createElement('tr');
-        tr.innerHTML = `<td class="small">${data.timestamp}</td><td>${data.sid}</td><td>${data.option_index}</td><td>${code}</td>`;
+        tr.innerHTML = `<td class="small">${data.timestamp}</td><td>${data.sid}</td>`;
         recentTbody.prepend(tr);
         while (recentTbody.children.length > 12) recentTbody.removeChild(recentTbody.lastChild);
       }
     } catch (e) {
       showResult(false, '网络/系统错误：' + (e && e.message ? e.message : e));
       input.select();
+    } finally {
+      isSubmitting = false;
+    }
+  }
+
+  function maybeAutoSubmit() {
+    if (!input) return;
+    const v = (input.value || '').trim();
+    if (v.length < 4) {
+      lastAutoSubmitted = null;
+      return;
+    }
+    if (v.length === 4 && v !== lastAutoSubmitted) {
+      lastAutoSubmitted = v;
+      submitCode();
     }
   }
 
   if (btn) btn.addEventListener('click', function(ev){ ev.preventDefault(); submitCode(); });
-  if (input) input.addEventListener('keydown', function(ev){
-    if (ev.key === 'Enter') { ev.preventDefault(); submitCode(); }
-  });
+
+  if (input) {
+    input.addEventListener('keydown', function(ev){
+      if (ev.key === 'Enter') { ev.preventDefault(); submitCode(); }
+    });
+
+    input.addEventListener('input', function(){
+      if ((input.value || '').length > 4) input.value = (input.value || '').slice(0, 4);
+      maybeAutoSubmit();
+    });
+  }
+
+  // 小键盘点击输入
+  if (keypad && input) {
+    keypad.addEventListener('click', function(ev){
+      const target = ev.target.closest('button');
+      if (!target) return;
+
+      const key = target.dataset.key;
+      const action = target.dataset.action;
+
+      if (key) {
+        const cur = (input.value || '');
+        if (cur.length >= 4) return;
+        input.value = cur + key;
+        input.focus();
+        maybeAutoSubmit();
+        return;
+      }
+
+      if (action === 'back') {
+        input.value = (input.value || '').slice(0, -1);
+        input.focus();
+        maybeAutoSubmit();
+        return;
+      }
+
+      if (action === 'clear') {
+        input.value = '';
+        input.focus();
+        maybeAutoSubmit();
+        return;
+      }
+
+      if (action === 'submit') {
+        submitCode();
+      }
+    });
+  }
+
+  // ===== 浮动面板：拖拽/缩放/保存 =====
+  const STORE_KEY = 'operator_keypad_state_v1';
+
+  function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+
+  function loadState() {
+    try { return JSON.parse(localStorage.getItem(STORE_KEY) || '{}'); } catch { return {}; }
+  }
+  function saveState(state) {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch {}
+  }
+
+  function keepOnScreen() {
+    if (!floating) return;
+    const rect = floating.getBoundingClientRect();
+    const maxLeft = Math.max(0, window.innerWidth - rect.width);
+    const maxTop = Math.max(0, window.innerHeight - rect.height);
+
+    const curLeft = parseFloat(floating.style.left || '0');
+    const curTop = parseFloat(floating.style.top || '0');
+    floating.style.left = `${clamp(curLeft, 0, maxLeft)}px`;
+    floating.style.top = `${clamp(curTop, 0, maxTop)}px`;
+  }
+
+  function applyState(state) {
+    if (!floating) return;
+
+    const defaultLeft = 16;
+    const defaultTop = 240;
+    const left = Number.isFinite(state.left) ? state.left : defaultLeft;
+    const top = Number.isFinite(state.top) ? state.top : defaultTop;
+    const scale = Number.isFinite(state.scale) ? state.scale : 1;
+
+    floating.style.left = `${left}px`;
+    floating.style.top = `${top}px`;
+    floating.style.setProperty('--kp-scale', String(clamp(scale, 0.6, 1.6)));
+
+    requestAnimationFrame(() => keepOnScreen());
+  }
+
+  function resetKeypad() {
+    const state = { left: 16, top: 240, scale: 1 };
+    applyState(state);
+    saveState(state);
+  }
+
+  if (floating) {
+    applyState(loadState());
+
+    const resetBtn = floating.querySelector('[data-action="reset-pos"]');
+    if (resetBtn) resetBtn.addEventListener('click', resetKeypad);
+
+    const dragHandle = floating.querySelector('[data-drag-handle]');
+    const resizeHandle = floating.querySelector('[data-resize-handle]');
+
+    // 拖拽移动
+    if (dragHandle) {
+      dragHandle.addEventListener('pointerdown', (ev) => {
+        ev.preventDefault();
+        dragHandle.setPointerCapture(ev.pointerId);
+
+        const startX = ev.clientX;
+        const startY = ev.clientY;
+        const startLeft = parseFloat(floating.style.left || '0');
+        const startTop = parseFloat(floating.style.top || '0');
+
+        function onMove(e) {
+          const dx = e.clientX - startX;
+          const dy = e.clientY - startY;
+          floating.style.left = `${startLeft + dx}px`;
+          floating.style.top = `${startTop + dy}px`;
+          keepOnScreen();
+        }
+
+        function onUp(e) {
+          dragHandle.releasePointerCapture(e.pointerId);
+          window.removeEventListener('pointermove', onMove);
+          window.removeEventListener('pointerup', onUp);
+
+          const state = loadState();
+          state.left = parseFloat(floating.style.left || '0');
+          state.top = parseFloat(floating.style.top || '0');
+          state.scale = parseFloat(getComputedStyle(floating).getPropertyValue('--kp-scale')) || state.scale || 1;
+          saveState(state);
+        }
+
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', onUp);
+      });
+    }
+
+    // 拖拽缩放（改 scale）
+    if (resizeHandle) {
+      resizeHandle.addEventListener('pointerdown', (ev) => {
+        ev.preventDefault();
+        resizeHandle.setPointerCapture(ev.pointerId);
+
+        const startX = ev.clientX;
+        const startY = ev.clientY;
+        const startScale = parseFloat(getComputedStyle(floating).getPropertyValue('--kp-scale')) || 1;
+
+        function onMove(e) {
+          const dx = e.clientX - startX;
+          const dy = e.clientY - startY;
+          const next = clamp(startScale + (dx + dy) / 600, 0.6, 1.6);
+          floating.style.setProperty('--kp-scale', String(next));
+          keepOnScreen();
+        }
+
+        function onUp(e) {
+          resizeHandle.releasePointerCapture(e.pointerId);
+          window.removeEventListener('pointermove', onMove);
+          window.removeEventListener('pointerup', onUp);
+
+          const state = loadState();
+          state.left = parseFloat(floating.style.left || '0');
+          state.top = parseFloat(floating.style.top || '0');
+          state.scale = parseFloat(getComputedStyle(floating).getPropertyValue('--kp-scale')) || 1;
+          saveState(state);
+        }
+
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', onUp);
+      });
+    }
+
+    window.addEventListener('resize', keepOnScreen);
+  }
 })();
 </script>
 {% endblock %}

@@ -281,3 +281,162 @@ hr.sep { border: none; border-top: 1px solid var(--border); margin: 12px 0; }
   color: var(--muted);
   line-height: 1.1;
 }
+
+/* ===== Operator keypad (tunable) ===== */
+/* 你可以只改这几个变量来调位置/大小 */
+:root{
+  --operator-keypad-max-width: 420px;   /* 小键盘整体最大宽度 */
+  --operator-keypad-offset-x: 0px;      /* 向右移动用正数 */
+  --operator-keypad-offset-y: 0px;      /* 向下移动用正数 */
+  --operator-keypad-scale: 1;           /* 整体缩放（0.8~1.2） */
+  --operator-keypad-gap: 10px;
+
+  --operator-keypad-btn-font: 24px;     /* 数字键字体 */
+  --operator-keypad-btn-pad: 12px 10px; /* 数字键内边距 */
+
+  --operator-keypad-fn-font: 16px;      /* 功能键字体（退格/清空） */
+  --operator-keypad-submit-font: 16px;  /* 录入按钮字体 */
+  --operator-keypad-submit-pad: 10px 10px; /* 录入按钮内边距 */
+}
+
+.keypad-wrap {
+  margin-top: 14px;
+  max-width: var(--operator-keypad-max-width);
+  transform: translate(var(--operator-keypad-offset-x), var(--operator-keypad-offset-y))
+             scale(var(--operator-keypad-scale));
+  transform-origin: top left;
+  user-select: none;
+  touch-action: manipulation;
+}
+
+.keypad {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--operator-keypad-gap);
+}
+
+.keypad-btn {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgba(255,255,255,0.06);
+  color: var(--text);
+  font-weight: 1000;
+  font-size: var(--operator-keypad-btn-font);
+  padding: var(--operator-keypad-btn-pad);
+  cursor: pointer;
+}
+
+.keypad-btn:hover { background: rgba(255,255,255,0.10); }
+
+.keypad-fn {
+  font-size: var(--operator-keypad-fn-font);
+  font-weight: 900;
+  color: var(--muted);
+}
+
+.keypad-submit {
+  grid-column: 1 / -1;
+  border-color: rgba(65,209,138,0.55);
+  background: rgba(65,209,138,0.18);
+  font-size: var(--operator-keypad-submit-font);
+  padding: var(--operator-keypad-submit-pad);
+}
+
+/* ===== Floating keypad (drag + resize) ===== */
+.floating-keypad {
+  position: fixed;
+  left: 16px;
+  top: 240px;
+  z-index: 50;
+  width: 280px;
+
+  transform: scale(var(--kp-scale, 1));
+  transform-origin: top left;
+
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgba(10, 14, 30, 0.88);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 18px 40px rgba(0,0,0,0.35);
+}
+
+.floating-keypad-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 10px;
+  border-bottom: 1px solid var(--border);
+  cursor: grab;
+  touch-action: none; /* 触控拖拽更顺 */
+}
+
+.floating-keypad-title {
+  font-weight: 900;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.floating-keypad-mini-btn {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(255,255,255,0.06);
+  color: var(--text);
+  font-weight: 800;
+  font-size: 12px;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+.floating-keypad-body {
+  padding: 10px;
+}
+
+.keypad {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  user-select: none;
+  touch-action: manipulation;
+}
+
+.keypad-btn {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgba(255,255,255,0.06);
+  color: var(--text);
+  font-weight: 1000;
+  font-size: 22px;
+  padding: 10px 10px;
+  cursor: pointer;
+}
+
+.keypad-btn:hover { background: rgba(255,255,255,0.10); }
+
+.keypad-fn {
+  font-size: 14px;
+  font-weight: 900;
+  color: var(--muted);
+}
+
+.keypad-submit {
+  grid-column: 1 / -1;
+  border-color: rgba(65,209,138,0.55);
+  background: rgba(65,209,138,0.16);
+  font-size: 14px;          /* 录入按钮变小 */
+  padding: 8px 10px;        /* 录入按钮变矮 */
+}
+
+.floating-keypad-resizer {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  width: 18px;
+  height: 18px;
+  border-right: 3px solid rgba(255,255,255,0.35);
+  border-bottom: 3px solid rgba(255,255,255,0.35);
+  border-radius: 3px;
+  cursor: nwse-resize;
+  touch-action: none;
+  opacity: 0.85;
+}

@@ -3,7 +3,7 @@ import json
 import random
 from datetime import datetime
 
-from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify, Response
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import func
 
@@ -530,6 +530,40 @@ def seeds():
     ensure_seeds()
     seeds_list = Seed.query.order_by(Seed.sid.asc()).all()
     return render_template("seeds.html", seeds=seeds_list, max_sid=MAX_SID)
+
+@app.route("/leaderboard/export_txt")
+def export_leaderboard_txt():
+    mode = (request.args.get("mode", "top") or "top").strip().lower()
+    n_raw = (request.args.get("n", "10") or "10").strip()
+    prefix_raw = (request.args.get("prefix", "5") or "5").strip()
+
+    try:
+        n = int(n_raw)
+        prefix = int(prefix_raw)
+    except Exception:
+        return Response("bad params\n", mimetype="text/plain; charset=utf-8", status=400)
+
+    if n < 1:
+        n = 1
+    if n > 1000:
+        n = 1000
+
+    if mode == "top":
+        query = Student.query.order_by(Student.score.desc(), Student.sid.asc())
+    elif mode == "bottom":
+        query = Student.query.order_by(Student.score.asc(), Student.sid.asc())
+    else:
+        return Response("mode must be top|bottom\n", mimetype="text/plain; charset=utf-8", status=400)
+
+    students = query.limit(n).all()
+    text = "".join(f"{prefix} {s.sid}\n" for s in students)
+
+    filename = f"leaderboard_{mode}_{n}.txt"
+    return Response(
+        text,
+        mimetype="text/plain; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 if __name__ == "__main__":
